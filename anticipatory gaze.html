@@ -2,11 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Anticipatory Gaze (q to quit)</title>
+    <title>Anticipatory Gaze</title>
     <script src="https://cdn.jsdelivr.net/npm/jspsych@6.3.1/jspsych.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspsych@6.3.1/plugins/jspsych-html-keyboard-response.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspsych@6.3.1/plugins/jspsych-image-keyboard-response.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspsych@6.3.1/plugins/jspsych-html-slider-response.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspsych@6.3.1/plugins/jspsych-audio-button-response.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jspsych@6.3.1/css/jspsych.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .jspsych-btn1 {
+            background-color: #696969; 
+            color: #696969;             
+            border: 2px solid #696969;
+            cursor: none;
+            border-radius: 4px;
+        }
+        .jspsych-btn2 {
+            background-color: #696969; 
+            color: #8FBC8F;            
+            border: 2px solid #696969; 
+            cursor: pointer;
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body></body>
 <script>
@@ -20,14 +39,16 @@
         'image6.png'
     ];
 
-    const probabilities = {
-        'image1.png': 0.7,
-        'image2.png': 0.5,
-        'image3.png': 0.1,
-        'image4.png': 0.2,
-        'image5.png': 0.4,
-        'image6.png': 0.8
-    };
+// Define the probability levels and shuffle them
+let probabilities = [0, 0.2, 0.4, 0.6, 0.8, 1]; //Hütter & Niese also include CSs which are NEVER or ALWAYS associated with pos/neg
+    probabilities = jsPsych.randomization.shuffle(probabilities);
+
+    // Assign the shuffled probabilities to the images
+    const imageProbabilities = {};
+    images.forEach((image, index) => {
+        imageProbabilities[image] = probabilities[index];
+    });
+
 
     // Randomly determine the position of "+" for each subject
     const plusPosition = Math.random() < 0.5 ? 'left' : 'right';
@@ -61,7 +82,7 @@
 
     const instruct = {
         type: 'html-keyboard-response',
-        stimulus: '<div style="font-size: 48px; color: #8FBC8F;">Click an image to see the next evaluation!</div>',
+        stimulus: '<div style="font-size: 48px; color: #8FBC8F;">Click an image to see a new evaluation!</div>',
         choices: jsPsych.NO_KEYS,
         trial_duration: 1000
     };
@@ -80,7 +101,7 @@
         },
         on_finish: function(data) {
             data.clicked_image = window.clicked_image;
-            const prob = probabilities[window.clicked_image];
+            const prob = imageProbabilities[window.clicked_image];
             const symbol = Math.random() < prob ? 'pos.png' : 'neg.png';
             data.symbol = symbol;
             window.last_symbol = symbol;
@@ -91,33 +112,60 @@
     // Function to handle image click
     function handleImageClick(event) {
         const clicked_image = event.target.dataset.image;
-        const prob = probabilities[clicked_image];
+        const prob = imageProbabilities[clicked_image];
         console.log(`Clicked image: ${clicked_image}, Probability: ${prob}`);
         window.clicked_image = clicked_image;
         jsPsych.finishTrial();
     }
 
     const followup_image = {
-        type: 'html-keyboard-response',
-        stimulus: function() {
-            const symbol = window.last_symbol;
-            const symbolPosition = symbol === 'pos.png' ? plusPosition : minusPosition;
+    type: 'audio-button-response',
+    css_classes: ['jspsych-btn1'],
+    stimulus: function() {
+        const symbol = window.last_symbol;
+        return symbol === 'pos.png' ? 'pos.m4a' : 'neg.m4a';
+    },
+    prompt: function() {
+        const symbol = window.last_symbol;
+        const symbolPosition = symbol === 'pos.png' ? plusPosition : minusPosition;
 
-            const symbolPositionStyle = symbolPosition === 'left' ? 'left: 20%;' : 'right: 20%;';
-            const transformStyle = symbolPosition === 'left' ? '' : 'transform: translateX(-100%);';
+        const symbolPositionStyle = symbolPosition === 'left' ? 'left: 20%;' : 'right: 20%;';
+        const transformStyle = symbolPosition === 'left' ? '' : 'transform: translateX(-100%);';
 
-            return `<img src="${symbol}" style="position: absolute; top: 50%; ${symbolPositionStyle} transform: translateY(-50%); width: 50px; height: 50px;">`;
-        },
-        choices: jsPsych.NO_KEYS,
-        trial_duration: 300,
-        on_start: function(trial) {
-            const symbol = window.last_symbol;
-            console.log(`Follow-up image displayed: ${symbol}`);
-        },
-        on_finish: function(trial) {
-            console.log('Follow-up image finished');
-        }
-    };
+        return `
+            <img src="${symbol}" style="position: absolute; top: 50%; ${symbolPositionStyle} transform: translateY(-50%); width: 50px; height: 50px;">
+            <img src="cover.png" style="position: absolute; top:45%; left: 45%;">
+        `;
+    },
+    choices: [' '],
+    trial_duration: 2000,
+    on_start: function(trial) {
+        const symbol = window.last_symbol;
+        console.log(`Follow-up image displayed: ${symbol}`);
+    },
+    on_finish: function(trial) {
+        console.log('Follow-up image finished');
+    }
+};
+
+
+
+
+
+    // Create evaluation trials for each image
+    const evaluation_trials = images.map((image) => {
+        return {
+            type: 'html-slider-response',
+            stimulus: `<img src="${image}" style="width: 200px; height: 200px;">`,
+            labels: ['Negative', 'Positive'],
+            min: 0,
+            max: 100,
+            start: 50,
+            prompt: '<p>How do you feel about this square?</p>',
+            require_movement: true,
+            css_classes: ['jspsych-btn2'],
+        };
+    });
 
     // Define the main procedure
     const main_procedure = {
@@ -125,7 +173,7 @@
     };
 
     // Add the phases to the main procedure
-    for (let i = 0; i < 20; i++) { // Change 20 to desired trial limit
+    for (let i = 0; i < 20; i++) { // Change to desired trial limit, 60 in Hütter an Niese
         main_procedure.timeline.push(instruct);
         main_procedure.timeline.push(fixation);
         main_procedure.timeline.push(blank);
@@ -138,7 +186,7 @@
 
     // Initialize jsPsych
     jsPsych.init({
-        timeline: [main_procedure],
+        timeline: [...evaluation_trials, main_procedure, ...evaluation_trials],
         on_finish: function() {
             jsPsych.data.displayData();
         },
